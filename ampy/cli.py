@@ -264,6 +264,74 @@ def put(local, remote):
 
 
 @cli.command()
+@click.argument("local", type=click.Path(exists=True))
+@click.argument("remote", required=False)
+def rsync(local, remote):
+    """Rsync a file or folder and its contents on the board.
+
+    Put will upload a local file or folder  to the board.  If the file already
+    exists on the board it will be overwritten with no warning!  You must pass
+    at least one argument which is the path to the local file/folder to
+    upload.  If the item to upload is a folder then it will be copied to the
+    board recursively with its entire child structure.  You can pass a second
+    optional argument which is the path and name of the file/folder to put to
+    on the connected board.
+
+    For example to upload a main.py from the current directory to the board's
+    root run:
+
+      ampy --port /board/serial/port put main.py
+
+    Or to upload a board_boot.py from a ./foo subdirectory and save it as boot.py
+    in the board's root run:
+
+      ampy --port /board/serial/port put ./foo/board_boot.py boot.py
+
+    To upload a local folder adafruit_library and all of its child files/folders
+    as an item under the board's root run:
+
+      ampy --port /board/serial/port put adafruit_library
+
+    Or to put a local folder adafruit_library on the board under the path
+    /lib/adafruit_library on the board run:
+
+      ampy --port /board/serial/port put adafruit_library /lib/adafruit_library
+    """
+    # Use the local filename if no remote filename is provided.
+    if remote is None:
+        remote = os.path.basename(os.path.abspath(local))
+    # Check if path is a folder and do recursive copy of everything inside it.
+    if os.path.isdir(local):
+
+        # Directory copy, create the directory and walk all children to copy
+        # over the files.
+        board_files = files.Files(_board)
+        for parent, child_dirs, child_files in os.walk(local):
+            # Create board filesystem absolute path to parent directory.
+            remote_parent = posixpath.normpath(
+                posixpath.join(remote, os.path.relpath(parent, local))
+            )
+            try:
+                # Create remote parent directory.
+                board_files.mkdir(remote_parent)
+            except files.DirectoryExistsError:
+                # Ignore errors for directories that already exist.
+                pass
+            # Loop through all the files and put them on the board too.
+            for filename in child_files:
+                with open(os.path.join(parent, filename), "rb") as infile:
+                    remote_filename = posixpath.join(remote_parent, filename)
+                    board_files.put(remote_filename, infile.read())
+    else:
+        # File copy, open the file and copy its contents to the board.
+        # Put the file on the board.
+        with open(local, "rb") as infile:
+            board_files = files.Files(_board)
+            board_files.put(remote, infile.read())
+
+
+
+@cli.command()
 @click.argument("remote_file")
 def rm(remote_file):
     """Remove a file from the board.
