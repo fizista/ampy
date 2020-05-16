@@ -311,12 +311,8 @@ def rsync(local, remote):
             remote_parent = posixpath.normpath(
                 posixpath.join(remote, os.path.relpath(parent, local))
             )
-            try:
-                # Create remote parent directory.
-                board_files.mkdir(remote_parent)
-            except files.DirectoryExistsError:
-                # Ignore errors for directories that already exist.
-                pass
+            # Create remote parent directory.
+            board_files.mkdir(remote_parent, exists_okay=True)
             # Loop through all the files and put them on the board too.
             for filename in child_files:
                 with open(os.path.join(parent, filename), "rb") as infile:
