@@ -238,7 +238,7 @@ def put(local, remote):
         # Directory copy, create the directory and walk all children to copy
         # over the files.
         board_files = files.Files(_board)
-        for parent, child_dirs, child_files in os.walk(local):
+        for parent, child_dirs, child_files in os.walk(local, followlinks=True):
             # Create board filesystem absolute path to parent directory.
             remote_parent = posixpath.normpath(
                 posixpath.join(remote, os.path.relpath(parent, local))
@@ -246,14 +246,15 @@ def put(local, remote):
             try:
                 # Create remote parent directory.
                 board_files.mkdir(remote_parent)
-                # Loop through all the files and put them on the board too.
-                for filename in child_files:
-                    with open(os.path.join(parent, filename), "rb") as infile:
-                        remote_filename = posixpath.join(remote_parent, filename)
-                        board_files.put(remote_filename, infile.read())
             except files.DirectoryExistsError:
                 # Ignore errors for directories that already exist.
                 pass
+            # Loop through all the files and put them on the board too.
+            for filename in child_files:
+                with open(os.path.join(parent, filename), "rb") as infile:
+                    remote_filename = posixpath.join(remote_parent, filename)
+                    board_files.put(remote_filename, infile.read())
+
 
     else:
         # File copy, open the file and copy its contents to the board.
@@ -387,7 +388,7 @@ def run(local_file, no_output):
     option.  This will run the script and immediately exit without waiting for
     the script to finish and print output.
 
-    For example to run a test.py script and print any output after it finishes:
+    For example to run a test.py script and print any output until it finishes:
 
       ampy --port /board/serial/port run test.py
 
@@ -398,7 +399,7 @@ def run(local_file, no_output):
     # Run the provided file and print its output.
     board_files = files.Files(_board)
     try:
-        output = board_files.run(local_file, not no_output)
+        output = board_files.run(local_file, not no_output, not no_output)
         if output is not None:
             print(output.decode("utf-8"), end="")
     except IOError:
@@ -471,7 +472,7 @@ def reset(mode):
         return
 
     try:
-        _board.exec_("reset()")
+        _board.exec_raw_no_follow("reset()")
     except serial.serialutil.SerialException as e:
         # An error is expected to occur, as the board should disconnect from
         # serial when restarted via microcontroller.reset()

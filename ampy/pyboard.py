@@ -177,7 +177,11 @@ class Pyboard:
         if _rawdelay > 0:
             time.sleep(_rawdelay)
 
-        self.serial.write(b'\r\x03\x03') # ctrl-C twice: interrupt any running program
+        # ctrl-C twice: interrupt any running program
+        self.serial.write(b'\r\x03')
+        time.sleep(0.1)
+        self.serial.write(b'\x03')
+        time.sleep(0.1)
 
         # flush input (without relying on serial.flushInput())
         n = self.serial.inWaiting()
@@ -261,16 +265,19 @@ class Pyboard:
         ret = ret.strip()
         return ret
 
-    def exec_(self, command):
-        ret, ret_err = self.exec_raw(command)
+    def exec_(self, command, stream_output=False):
+        data_consumer = None
+        if stream_output:
+            data_consumer = stdout_write_bytes
+        ret, ret_err = self.exec_raw(command, data_consumer=data_consumer)
         if ret_err:
             raise PyboardError('exception', ret, ret_err)
         return ret
 
-    def execfile(self, filename):
+    def execfile(self, filename, stream_output=False):
         with open(filename, 'rb') as f:
             pyfile = f.read()
-        return self.exec_(pyfile)
+        return self.exec_(pyfile, stream_output=stream_output)
 
     def get_time(self):
         t = str(self.eval('pyb.RTC().datetime()'), encoding='utf8')[1:-1].split(', ')

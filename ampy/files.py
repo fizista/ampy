@@ -21,6 +21,7 @@
 # SOFTWARE.
 import ast
 import textwrap
+import binascii
 
 from ampy.pyboard import PyboardError
 
@@ -58,12 +59,13 @@ class Files(object):
         # expects string data.
         command = """
             import sys
+            import ubinascii
             with open('{0}', 'rb') as infile:
                 while True:
                     result = infile.read({1})
                     if result == b'':
                         break
-                    len = sys.stdout.write(result)
+                    len = sys.stdout.write(ubinascii.hexlify(result))
         """.format(
             filename, BUFFER_SIZE
         )
@@ -73,12 +75,15 @@ class Files(object):
         except PyboardError as ex:
             # Check if this is an OSError #2, i.e. file doesn't exist and
             # rethrow it as something more descriptive.
-            if ex.args[2].decode("utf-8").find("OSError: [Errno 2] ENOENT") != -1:
-                raise RuntimeError("No such file: {0}".format(filename))
-            else:
+            try:
+                if ex.args[2].decode("utf-8").find("OSError: [Errno 2] ENOENT") != -1:
+                    raise RuntimeError("No such file: {0}".format(filename))
+                else:
+                    raise ex
+            except UnicodeDecodeError:
                 raise ex
         self._pyboard.exit_raw_repl()
-        return out
+        return binascii.unhexlify(out)
 
     def ls(self, directory="/", long_format=True, recursive=False):
         """List the contents of the specified directory (or root if none is
@@ -291,14 +296,18 @@ class Files(object):
                 raise ex
         self._pyboard.exit_raw_repl()
 
-    def run(self, filename, wait_output=True):
+    def run(self, filename, wait_output=True, stream_output=True):
         """Run the provided script and return its output.  If wait_output is True
-        (default) then wait for the script to finish and then print its output,
+        (default) then wait for the script to finish and then return its output,
         otherwise just run the script and don't wait for any output.
+        If stream_output is True(default) then return None and print outputs to
+        stdout without buffering.
         """
         self._pyboard.enter_raw_repl()
         out = None
-        if wait_output:
+        if stream_output:
+            self._pyboard.execfile(filename, stream_output=True)
+        elif wait_output:
             # Run the file and wait for output to return.
             out = self._pyboard.execfile(filename)
         else:
